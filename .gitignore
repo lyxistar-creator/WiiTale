@@ -1,0 +1,36 @@
+# ===[ Game files ]===
+#
+# UNDERTALE is a commercial game. Nothing that came out of it goes in here: not the
+# data.win, not the audio, not the texture pack built from it. The port is the code that
+# runs the game; the game itself stays on the disk you bought it from.
+data.win
+*.ogg
+*.wtex
+dist/
+*/slots/
+
+# ===[ Other people's projects ]===
+#
+# These were downloaded to read, not written here, and each carries its own licence.
+# Butterscotch is what Cinnamon forked from; GRRLIB brings up video; the rest are Wii
+# tools and someone else's attempt at the same port. None of them belong in this history.
+Butterscotch-main/
+GRRLIB-4.6.1/
+customizemii-master/
+wad-manager-master/
+undertale-wii-da-github/
+*.zip
+
+# ===[ Build output ]===
+build/
+build_wii/
+*.dol
+*.elf
+*.map
+*.o
+*.d
+
+# ===[ Working files ]===
+*.raw
+*.log
+*.qoicache

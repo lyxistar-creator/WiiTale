@@ -1,0 +1,138 @@
+#---------------------------------------------------------------------------------
+# WiiTale - Undertale native port for Nintendo Wii
+# Cinnamon/Butterscotch GameMaker: Studio runner, GX backend
+#---------------------------------------------------------------------------------
+.SUFFIXES:
+
+ifeq ($(strip $(DEVKITPPC)),)
+$(error "Please set DEVKITPPC in your environment. export DEVKITPPC=<path to>devkitPro/devkitPPC")
+endif
+
+include $(DEVKITPPC)/wii_rules
+
+#---------------------------------------------------------------------------------
+# TARGET    is the name of the output (.dol / .elf)
+# BUILD     is the directory where object files & intermediates are placed
+# SOURCES   are directories containing source code (ALL .c inside are compiled)
+# INCLUDES  are directories containing extra header files
+#---------------------------------------------------------------------------------
+TARGET      := wiitale
+BUILD       := build_wii
+SOURCES     := src src/wii \
+               vendor/bzip2 vendor/sha1 vendor/md5 vendor/base64 vendor/stb/vorbis
+DATA        :=
+INCLUDES    := src src/wii \
+               vendor/stb/ds vendor/stb/image vendor/stb/vorbis \
+               vendor/bzip2 vendor/sha1 vendor/md5 vendor/base64
+
+#---------------------------------------------------------------------------------
+# options for code generation
+#---------------------------------------------------------------------------------
+# Feature defines:
+#   PLATFORM_WII    - selects the Wii backend paths in shared code
+#   ENABLE_WAD16/17 - Undertale 1.08 is WAD (bytecode) version 16
+# WAD14 is left off on purpose: it costs code size we cannot spare on MEM1.
+DEFINES     := -DPLATFORM_WII -DENABLE_WAD16 -DENABLE_WAD17
+
+CFLAGS      = -g -O2 -Wall -Wno-unused-parameter -Wno-unused-function \
+              $(MACHDEP) $(INCLUDE) $(DEFINES) -ffunction-sections -fdata-sections
+CXXFLAGS    = $(CFLAGS)
+LDFLAGS     = -g $(MACHDEP) -Wl,-Map,$(notdir $@).map -Wl,--gc-sections
+
+#---------------------------------------------------------------------------------
+# any extra libraries we wish to link with the project
+# NOTE: link order matters. fat -> wiiuse/bte -> ogc must stay in this order.
+#---------------------------------------------------------------------------------
+LIBS        := -lfat -lasnd -lwiiuse -lbte -logc -lm
+
+#---------------------------------------------------------------------------------
+# list of directories containing libraries
+#---------------------------------------------------------------------------------
+LIBDIRS     :=
+
+#---------------------------------------------------------------------------------
+# no real need to edit anything past this point unless you need to add additional
+# rules for different file extensions
+#---------------------------------------------------------------------------------
+ifneq ($(BUILD),$(notdir $(CURDIR)))
+#---------------------------------------------------------------------------------
+
+export OUTPUT   := $(CURDIR)/$(TARGET)
+export VPATH    := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
+                   $(foreach dir,$(DATA),$(CURDIR)/$(dir))
+export DEPSDIR  := $(CURDIR)/$(BUILD)
+
+#---------------------------------------------------------------------------------
+# automatically build a list of object files for our project
+#---------------------------------------------------------------------------------
+CFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CPPFILES    := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
+sFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
+SFILES      := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.S)))
+BINFILES    := $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+
+#---------------------------------------------------------------------------------
+# use CXX for linking C++ projects, CC for standard C
+#---------------------------------------------------------------------------------
+ifeq ($(strip $(CPPFILES)),)
+    export LD := $(CC)
+else
+    export LD := $(CXX)
+endif
+
+export OFILES_BIN    := $(addsuffix .o,$(BINFILES))
+export OFILES_SOURCES := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(sFILES:.s=.o) $(SFILES:.S=.o)
+export OFILES        := $(OFILES_BIN) $(OFILES_SOURCES)
+export HFILES_BIN    := $(addsuffix .h,$(subst .,_,$(BINFILES)))
+
+export INCLUDE  := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+                   $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+                   -I$(CURDIR)/$(BUILD) \
+                   -I$(LIBOGC_INC)
+
+export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
+                   -L$(LIBOGC_LIB)
+
+.PHONY: $(BUILD) clean all run
+
+#---------------------------------------------------------------------------------
+all: $(BUILD)
+
+$(BUILD):
+	@[ -d $@ ] || mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile.wii
+
+#---------------------------------------------------------------------------------
+clean:
+	@echo clean ...
+	@rm -fr $(BUILD) $(OUTPUT).elf $(OUTPUT).dol $(OUTPUT).elf.map
+
+#---------------------------------------------------------------------------------
+run: $(BUILD)
+	wiiload $(OUTPUT).dol
+
+#---------------------------------------------------------------------------------
+else
+
+DEPENDS := $(OFILES:.o=.d)
+
+#---------------------------------------------------------------------------------
+# main targets
+#---------------------------------------------------------------------------------
+$(OUTPUT).dol: $(OUTPUT).elf
+$(OUTPUT).elf: $(OFILES)
+
+$(OFILES_SOURCES) : $(HFILES_BIN)
+
+#---------------------------------------------------------------------------------
+# convert binary data files into object files
+#---------------------------------------------------------------------------------
+%.bin.o %_bin.h : %.bin
+	@echo $(notdir $<)
+	$(bin2o)
+
+-include $(DEPENDS)
+
+#---------------------------------------------------------------------------------
+endif
+#---------------------------------------------------------------------------------
